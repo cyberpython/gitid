@@ -60,14 +60,20 @@ markers in all source code files.</p>
 <p>In order to build the program:</p>
 
 <ul>
-<li>Download and build libgit2 (on Windows, on Linux you can use your package manager to install the library and headers).</li>
+<li>Download and build <a href="https://libgit2.github.com/">libgit2</a> (on Windows, on Linux you can use your package manager to install the library and headers).</li>
 <li>Compile with:
-    gcc -o gitid.exe src\gitid.c src\git_helper.c -I -L -lgit2
-e.g. on Windows:
-      gcc -o gitid.exe src\gitid.c src\git_helper.c -IC:\projects\libgit2-0.22.0\include -LC:\projects\libgit2-0.22.0\build\Debug -lgit2
-or on Linux:
-      gcc -o gitid src/gitid.c src/git_helper.c -I/usr/local/include -L/usr/local/lib -lgit2</li>
+    gcc -o gitid.exe src\gitid.c src\git_helper.c -I -L -lgit2</li>
 </ul>
+
+<p>For example on Windows:</p>
+
+<pre><code>    gcc -o gitid.exe src\gitid.c src\git_helper.c -IC:\projects\libgit2-0.22.0\include -LC:\projects\libgit2-0.22.0\build\Debug -lgit2
+</code></pre>
+
+<p>And on Linux:</p>
+
+<pre><code>    gcc -o gitid src/gitid.c src/git_helper.c -I/usr/local/include -L/usr/local/lib -lgit2
+</code></pre>
 
 <h2>
 <a id="usage" class="anchor" href="#usage" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Usage</h2>
