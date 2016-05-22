@@ -29,12 +29,16 @@ The program has been built and tested under:
 
 In order to build the program:
 
-- Download and build libgit2 (on Windows, on Linux you can use your package manager to install the library and headers).
+- Download and build [libgit2](https://libgit2.github.com/) (on Windows, on Linux you can use your package manager to install the library and headers).
 - Compile with:
         gcc -o gitid.exe src\gitid.c src\git_helper.c -I<libgit2_include_dir_path> -L<libgit2_lib_dir_path> -lgit2
-  e.g. on Windows:
+
+For example on Windows:
+
         gcc -o gitid.exe src\gitid.c src\git_helper.c -IC:\projects\libgit2-0.22.0\include -LC:\projects\libgit2-0.22.0\build\Debug -lgit2
-  or on Linux:
+        
+And on Linux:
+
         gcc -o gitid src/gitid.c src/git_helper.c -I/usr/local/include -L/usr/local/lib -lgit2
 
 
