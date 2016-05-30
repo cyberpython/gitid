@@ -101,7 +101,7 @@ static const char * source_file_exts[] = { ".adb", ".ads", ".c", ".h", ".cpp",
 char * read_file(char *filepath){
 	char *buf = NULL;
 	size_t size = 0;
-	FILE *f = fopen(filepath, "r");
+	FILE *f = fopen(filepath, "rb");
 	if(f == NULL){
 		return NULL;
 	}
@@ -200,16 +200,16 @@ int replace_keyword_in_file(const char *keyword, const char *replacement,
 		return REPLACE_RESULT_READ_FILE_ERROR;
 	}
 
-	f = fopen(filepath, "wb+");
-
-	if(!f){
-		cleanup_after_replace(f, buf, pattern);
-		return REPLACE_RESULT_OPEN_FILE_ERROR;
-	}
-
 	stop_at = find_pattern(buf, size, 0, pattern, pattern_len);
 
 	if (stop_at != -1) {
+
+		f = fopen(filepath, "wb");
+
+		if(!f){
+			cleanup_after_replace(f, buf, pattern);
+			return REPLACE_RESULT_OPEN_FILE_ERROR;
+		}
 
 		do {
 
@@ -221,7 +221,6 @@ int replace_keyword_in_file(const char *keyword, const char *replacement,
 			fflush(f);
 
 			if(stop_at == size){
-				printf("SHOULD STOP.\n");
 				next_delimeter = -1;
 			}else{
 				next_delimeter = find_char(buf, size, stop_at + 1, delimeter);
@@ -236,10 +235,13 @@ int replace_keyword_in_file(const char *keyword, const char *replacement,
 			}
 
 		} while (stop_at != -1);
+
+		if (read_from < size) {
+			fwrite(buf+read_from, 1, size - read_from, f);
+		}
 	}
 
-	if (read_from < size)
-		fwrite(buf+read_from, 1, size - read_from, f);
+
 
 	cleanup_after_replace(f, buf, pattern);
 	return REPLACE_RESULT_OK;
