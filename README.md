@@ -17,7 +17,11 @@ The following markers are supported (case sensitive):
 `$Name: <git tag name> $`. If no tag is found, then `$Name$` is replaced by 
 `$Name: WORKING $`.
 
-Only files with the following extensions are elligible for keyword substitution:
+The file name extensions that are used are loaded from a file named `extensions.txt`
+placed in the same directory with the gitid executable.
+
+If the `extensions.txt` file is not found, only files with the following extensions 
+are elligible for keyword substitution:
 
         .adb, .ads, .c, .h, .cpp, .hpp, .cc, .java, .py, .js, .cs, .rc, .xml, .html, .htm, .xhtml
 
