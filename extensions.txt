@@ -1,0 +1,16 @@
+.adb
+.ads
+.c
+.h
+.cpp
+.hpp
+.cc
+.java
+.py
+.js
+.cs
+.rc
+.xml
+.html
+.htm
+.xhtml

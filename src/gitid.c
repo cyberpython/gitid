@@ -65,10 +65,16 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <ctype.h>
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 
 #include "git_helper.h"
 
 #define PATH_MAX_LEN 4096
+#define MAX_EXTS 1024
 
 #define REPLACE_RESULT_OK 0
 #define REPLACE_RESULT_OPEN_FILE_ERROR 1
@@ -85,24 +91,184 @@ typedef int bool;
 
 #ifdef _WIN32
 
-#define PATH_SEPARATOR_CHAR "\\"
+#define PATH_SEPARATOR_CHAR '\\'
 
 #else
 
-#define PATH_SEPARATOR_CHAR "/"
+#define PATH_SEPARATOR_CHAR '/'
 
 #endif
 
-static const char * source_file_exts[] = { ".adb", ".ads", ".c", ".h", ".cpp",
-		".hpp", ".cc", ".java", ".py", ".js", ".cs", ".rc", ".xml", ".html",
-		".htm", ".xhtml" };
+static const char * DEFAULT_SOURCE_FILE_EXTS[] = { ".adb", ".ads", ".c", ".h",
+		".cpp", ".hpp", ".cc", ".java", ".py", ".js", ".cs", ".rc", ".xml",
+		".html", ".htm", ".xhtml" };
 
+static const char* EXTS_FILE_NAME = "extensions.txt";
 
-char * read_file(char *filepath){
+bool get_parent_path(const char *file_path, char *parentdir_path,
+		size_t max_len) {
+	char *sep = strrchr(file_path, (int) PATH_SEPARATOR_CHAR);
+	size_t len = 0;
+	size_t i = 0;
+	char *c = (char*) file_path;
+	while (c != sep) {
+		c++;
+		len++;
+	}
+
+	if (len < max_len) { /* Lower than so that there is space for the null-terminator. */
+
+		while (i < len) {
+			parentdir_path[i] = file_path[i];
+			i++;
+		}
+
+		parentdir_path[i] = '\0'; /* Add the null-terminator */
+		return true;
+
+	} else {
+		return false;
+	}
+}
+
+void get_exts_file_path(char *path, size_t max_len, bool *success) {
+
+	char exe_path[PATH_MAX_LEN] = { 0 };
+	char dir_path[PATH_MAX_LEN] = { 0 };
+	size_t path_size = 0;
+
+#ifdef _WIN32
+	DWORD size = 0;
+	*success = false;
+	if ((size = GetModuleFileName(NULL, exe_path, PATH_MAX_LEN - 1)) != 0) {
+		*success = true;
+		path[size] = '\0';
+	}
+#else
+	ssize_t size = 0;
+	*success = false;
+	if ( (size = readlink("/proc/self/exe", exe_path, PATH_MAX_LEN-1)) != -1) {
+		*success = true;
+		path[size] = '\0';
+	}
+#endif
+	if (*success) {
+
+		*success = false;
+
+		if (get_parent_path(exe_path, dir_path, PATH_MAX_LEN)) {
+			path_size = snprintf(path, max_len, "%s%c%s", dir_path,
+					PATH_SEPARATOR_CHAR, EXTS_FILE_NAME);
+			if (path_size < max_len) {
+				path[path_size] = '\0';
+				*success = true;
+			}
+		}
+
+	}
+}
+
+void load_hardcoded_extensions_list(char*** extensions, int *extensions_count) {
+	int i = 0;
+	int ext_count = sizeof(DEFAULT_SOURCE_FILE_EXTS) / sizeof(char*);
+	*extensions = malloc(ext_count * sizeof(char*));
+	*extensions_count = ext_count;
+	for (i = 0; i < ext_count; i++) {
+		(*extensions)[i] = (char*) DEFAULT_SOURCE_FILE_EXTS[i];
+	}
+}
+
+void trim(char *str) {
+	char *start = NULL;
+	char *end = NULL;
+
+	for (start = str; *start != '\0'; start++) {
+		if (!isspace((unsigned char) start[0])){
+			break;
+		}
+	}
+
+	for (end = start + strlen(start); end > start + 1; end--) {
+		if (!isspace((unsigned char) end[-1])){
+			break;
+		}
+	}
+
+	*end = 0;
+
+	if (start > str)
+		memmove(str, start, (end - start) + 1);
+}
+
+void load_file_exts(char*** extensions, int *extensions_count) {
+
+	*extensions = NULL;
+	char exts_file_path[PATH_MAX_LEN] = { 0 };
+	char line[1024] = { 0 };
+	size_t line_len = 0;
+	char *newline_pos = NULL;
+	char *tmp_exts[1024] = { 0 };
+	int ext_count = 0;
+	int i = 0;
+	*extensions_count = 0;
+
+	bool success = false;
+	get_exts_file_path(exts_file_path, PATH_MAX_LEN - 1, &success);
+	FILE *exts_fp = NULL;
+	if (success) {
+
+		exts_fp = fopen(exts_file_path, "r");
+
+		if (exts_fp != NULL) {
+
+			while (ext_count < MAX_EXTS) {
+				if (fgets(line, sizeof(line), exts_fp) == NULL) {
+					break;
+				}
+
+				if ((newline_pos = strchr(line, '\n')) != NULL) {
+					*newline_pos = '\0';
+				}
+
+				trim(line);
+				if (line[0] != '\0') { /* Not an empty string */
+					line_len = strlen(line);
+					if(line_len > 0){
+						tmp_exts[ext_count] = malloc(strlen(line) + 1);
+						strcpy(tmp_exts[ext_count], line);
+						ext_count++;
+					}
+				}
+			}
+
+			fclose(exts_fp);
+			exts_fp = NULL;
+
+			*extensions = malloc(ext_count * sizeof(char*));
+			for (i = 0; i < ext_count; i++) {
+				(*extensions)[i] = tmp_exts[i];
+			}
+
+			*extensions_count = ext_count;
+
+		} else {
+			printf(
+					"No extensions file found - falling back to hardcoded list.\n");
+			load_hardcoded_extensions_list(extensions, extensions_count);
+		}
+	} else {
+		printf(
+				"Error reading extensions file - falling back to hardcoded list.\n");
+		load_hardcoded_extensions_list(extensions, extensions_count);
+	}
+
+}
+
+char * read_file(char *filepath) {
 	char *buf = NULL;
 	size_t size = 0;
 	FILE *f = fopen(filepath, "rb");
-	if(f == NULL){
+	if (f == NULL) {
 		return NULL;
 	}
 
@@ -114,7 +280,7 @@ char * read_file(char *filepath){
 	fseeko(f, 0, SEEK_SET);
 #endif
 
-	if(!(buf = malloc(size + 1))){
+	if (!(buf = malloc(size + 1))) {
 		return NULL;
 	}
 	memset(buf, 0, size + 1);
@@ -129,14 +295,12 @@ int find_pattern(const char *str, size_t len, int start_at, const char *pattern,
 	int j = 0;
 	size_t max = len - pattern_length;
 	while (i < max) {
-		for (j = 0; j < pattern_length; j++)
-		{
-			if (str[i+j] != pattern[j])
+		for (j = 0; j < pattern_length; j++) {
+			if (str[i + j] != pattern[j])
 				break;
 		}
 
-		if (j == pattern_length)
-		{
+		if (j == pattern_length) {
 			return i;
 		}
 
@@ -185,17 +349,17 @@ int replace_keyword_in_file(const char *keyword, const char *replacement,
 	FILE *f = NULL;
 
 	pattern = malloc(pattern_len);
-	pattern[pattern_len-1] = 0;
+	pattern[pattern_len - 1] = 0;
 	snprintf(pattern, pattern_len, "%c%s", delimeter, keyword);
 	pattern_len--;
 
-	buf = read_file((char*)filepath);
-	if(!buf){
+	buf = read_file((char*) filepath);
+	if (!buf) {
 		cleanup_after_replace(f, buf, pattern);
 		return REPLACE_RESULT_READ_FILE_ERROR;
 	}
 	size = strlen(buf);
-	if(size == 0){
+	if (size == 0) {
 		cleanup_after_replace(f, buf, pattern);
 		return REPLACE_RESULT_READ_FILE_ERROR;
 	}
@@ -206,7 +370,7 @@ int replace_keyword_in_file(const char *keyword, const char *replacement,
 
 		f = fopen(filepath, "wb");
 
-		if(!f){
+		if (!f) {
 			cleanup_after_replace(f, buf, pattern);
 			return REPLACE_RESULT_OPEN_FILE_ERROR;
 		}
@@ -220,15 +384,16 @@ int replace_keyword_in_file(const char *keyword, const char *replacement,
 			fwrite(end_str, 1, 2, f);
 			fflush(f);
 
-			if(stop_at == size){
+			if (stop_at == size) {
 				next_delimeter = -1;
-			}else{
+			} else {
 				next_delimeter = find_char(buf, size, stop_at + 1, delimeter);
 			}
 
 			if (next_delimeter != -1) {
 				read_from = next_delimeter + 1;
-				stop_at = find_pattern(buf, size, read_from, pattern, pattern_len);
+				stop_at = find_pattern(buf, size, read_from, pattern,
+						pattern_len);
 			} else {
 				read_from = stop_at + pattern_len;
 				stop_at = -1;
@@ -237,22 +402,24 @@ int replace_keyword_in_file(const char *keyword, const char *replacement,
 		} while (stop_at != -1);
 
 		if (read_from < size) {
-			fwrite(buf+read_from, 1, size - read_from, f);
+			fwrite(buf + read_from, 1, size - read_from, f);
 		}
 	}
-
-
 
 	cleanup_after_replace(f, buf, pattern);
 	return REPLACE_RESULT_OK;
 }
 
-bool is_candidate_file(const char *filepath) {
+bool is_candidate_file(const char *filepath, char **extensions,
+		int extensions_count) {
 	char *dot = strrchr(filepath, '.');
 	int i;
-	for (i = 0; i < sizeof(source_file_exts) / sizeof(char*); i++) {
-		if (dot && !strcmp(dot, source_file_exts[i])) {
-			return true;
+
+	if (extensions && (extensions_count > 0)) {
+		for (i = 0; i < extensions_count; i++) {
+			if (dot && !strcmp(dot, extensions[i])) {
+				return true;
+			}
 		}
 	}
 
@@ -260,7 +427,7 @@ bool is_candidate_file(const char *filepath) {
 }
 
 void process_files_recursively(const char *dirpath, const char* pattern,
-		const char* replace_with) {
+		const char* replace_with, char **extensions, int extensions_count) {
 	DIR *dir;
 	struct dirent *entry;
 
@@ -272,16 +439,17 @@ void process_files_recursively(const char *dirpath, const char* pattern,
 
 	do {
 		char path[PATH_MAX_LEN];
-		int len = snprintf(path, sizeof(path) - 1, "%s%s%s", dirpath,
+		int len = snprintf(path, sizeof(path) - 1, "%s%c%s", dirpath,
 		PATH_SEPARATOR_CHAR, entry->d_name);
 		path[len] = 0;
 		if (entry->d_type == DT_DIR) {
 			if (strcmp(entry->d_name, ".") == 0
 					|| strcmp(entry->d_name, "..") == 0)
 				continue;
-			process_files_recursively(path, pattern, replace_with);
+			process_files_recursively(path, pattern, replace_with, extensions,
+					extensions_count);
 		} else {
-			if (is_candidate_file(path)) {
+			if (is_candidate_file(path, extensions, extensions_count)) {
 				replace_keyword_in_file(pattern, replace_with, path, '$');
 			}
 		}
@@ -295,6 +463,8 @@ int main(void) {
 	char abspath[PATH_MAX_LEN];
 	char *tag_name = NULL;
 	char *commit_id = NULL;
+	char **extensions = NULL;
+	int extensions_count = 0;
 
 	git_helper_initialize();
 
@@ -308,39 +478,41 @@ int main(void) {
 
 #endif
 
+	load_file_exts(&extensions, &extensions_count);
 
 	get_git_tag_name(&tag_name);
 	get_git_commit_id(&commit_id);
 
-	if(tag_name == NULL){
+	if (tag_name == NULL) {
 		tag_name = malloc(strlen(NO_TAG_TEXT));
 		strcpy(tag_name, NO_TAG_TEXT);
 	}
 
-	if(commit_id == NULL){
+	if (commit_id == NULL) {
 		commit_id = malloc(strlen(UNKNOWN_COMMIT_ID_TEXT));
 		strcpy(commit_id, UNKNOWN_COMMIT_ID_TEXT);
 	}
 
 	fflush(stdout);
 
-	process_files_recursively(abspath, "Name", tag_name);
-	process_files_recursively(abspath, "Id", commit_id);
+	process_files_recursively(abspath, "Name", tag_name, extensions,
+			extensions_count);
+	process_files_recursively(abspath, "Id", commit_id, extensions,
+			extensions_count);
 
-	if(commit_id)
-	{
+	if (commit_id) {
 		free(commit_id);
 	}
 
-	if(tag_name)
-	{
+	if (tag_name) {
 		free(tag_name);
 	}
 
+	if (extensions) {
+		free(extensions);
+	}
+
 	git_helper_finalize();
-
-
-
 
 	return 0;
 }
