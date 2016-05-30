@@ -42,7 +42,11 @@ markers in all source code files.</p>
 <code>$Name: &lt;git tag name&gt; $</code>. If no tag is found, then <code>$Name$</code> is replaced by 
 <code>$Name: WORKING $</code>.</p>
 
-<p>Only files with the following extensions are elligible for keyword substitution:</p>
+<p>The file name extensions that are used are loaded from a file named <code>extensions.txt</code>
+placed in the same directory with the gitid executable.</p>
+
+<p>If the <code>extensions.txt</code> file is not found, only files with the following extensions 
+are elligible for keyword substitution:</p>
 
 <pre><code>    .adb, .ads, .c, .h, .cpp, .hpp, .cc, .java, .py, .js, .cs, .rc, .xml, .html, .htm, .xhtml
 </code></pre>
